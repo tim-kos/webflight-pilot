@@ -1,5 +1,3 @@
-PILOT_ACCELERATION = 0.04;
-
 (function(window, document) {
   'use strict';
 
@@ -14,12 +12,11 @@ PILOT_ACCELERATION = 0.04;
     39: {ev: 'move', action: 'clockwise'}, // cursor right
     84: {ev: 'drone', action: 'takeoff'}, // t
     76: {ev: 'drone', action: 'land'},  // l
-    // 70: {ev: 'func', action: 'fire'}, // f
+    70: {ev: 'func', action: 'fire'}, // f
     71: {ev: 'animate', action: 'flipLeft', duration: 15}, // g
     72: {ev: 'animate', action: 'flipAhead', duration: 15}, // h
     67: {ev: 'animate', action: 'yawShake', duration: 2000}, // c
     80: {ev: 'animate', action: 'doublePhiThetaMixed', duration: 2000}, // p
-    70: {ev: 'animate', action: 'wave', duration: 2000}, // w
     69: {ev: 'drone', action: 'disableEmergency'} // e
   };
 
@@ -38,11 +35,11 @@ PILOT_ACCELERATION = 0.04;
 
     var self = this;
     setInterval(function() {
-      self.sendCommands();
+      self._sendCommands();
     }, 100);
   };
 
-  Pilot.prototype.sendCommands = function() {
+  Pilot.prototype._sendCommands = function() {
     for (var code in keymap) {
       var key = keymap[code];
       if (!key || !key.down) {
@@ -53,7 +50,7 @@ PILOT_ACCELERATION = 0.04;
         return this.fire();
       }
 
-      this.cockpit.socket.emit("/pilot/" + key.ev, {
+      this._sendCommand("/pilot/" + key.ev, {
         action : key.action,
         speed : 1,
         duration: key.duration
@@ -61,9 +58,6 @@ PILOT_ACCELERATION = 0.04;
     }
   };
 
-  /*
-   * Register keyboard event listener
-   */
   Pilot.prototype.listen = function listen() {
     var self = this;
 
@@ -82,19 +76,21 @@ PILOT_ACCELERATION = 0.04;
       }
 
       keymap[e.keyCode].down = false;
-      return self.cockpit.socket.emit("/pilot/stop", {
+      return self._sendCommand("/pilot/stop", {
         action: 'stop'
       });
     });
 
     $('#calibratemagneto').click(function(ev) {
       ev.preventDefault();
-      self.calibrate(0);
+      self._sendCommand("/pilot/calibrate", {device_num : 0});
     });
+
     $('#ftrim').click(function(ev) {
       ev.preventDefault();
-      self.ftrim();
+      self._sendCommand("/pilot/ftrim");
     });
+
     this.cockpit.socket.on('hovering', function() {
       $('#calibratemagneto').prop('disabled', false);
       $('#ftrim').prop('disabled', true);
@@ -105,37 +101,21 @@ PILOT_ACCELERATION = 0.04;
     });
   };
 
-  /*
-   * Requets a device callibration. Beware that for some device
-   * such as the compass, the drone will perform some motion.
-   */
-  Pilot.prototype.calibrate = function calibrate(deviceNum) {
-    this.cockpit.socket.emit("/pilot/calibrate", {
-      device_num : 0
-    });
-  };
-
-  /*
-   * Requests a flat trim. Disabled when flying.
-   */
-  Pilot.prototype.ftrim = function() {
-    this.cockpit.socket.emit("/pilot/ftrim");
-  };
-
   Pilot.prototype.fire = function() {
-    this.playFireSound();
-    var opts = {
-      action: 'fire',
-      duration: 2000,
-      hz: 5
-    };
-    return self.cockpit.socket.emit("/pilot/animateLeds", opts);
-  };
-
-  Pilot.prototype.playFireSound = function() {
     setTimeout(function() {
       document.getElementById('fire_sound').play();
     }, 900);
+
+    return this._sendCommand("/pilot/animateLeds", {
+      action: 'fire',
+      duration: 2000,
+      hz: 5
+    });
+  };
+
+  Pilot.prototype._sendCommand = function(cmd, opts) {
+    opts = opts || {};
+    this.cockpit.socket.emit(cmd, opts);
   };
 
   window.Cockpit.plugins.push(Pilot);
